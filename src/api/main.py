@@ -1,3 +1,4 @@
+from pathlib import Path
 import json
 import logging
 import os
@@ -10,17 +11,31 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
 
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _resolve_project_path(value: Optional[str], default_name: str) -> Path:
+    if value is None or value == "":
+        return PROJECT_ROOT / default_name
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return candidate
+    return (PROJECT_ROOT / candidate).resolve()
+
+
 # Structured JSON Logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("supply_chain_api")
 
 app = FastAPI(title="Supply Chain Intelligence API", version="1.0.0")
-DB_PATH = os.getenv("DB_PATH", "supply_chain.db")
+DB_PATH = str(_resolve_project_path(os.getenv("DB_PATH"), "supply_chain.db"))
+MODEL_PATH = str(_resolve_project_path(os.getenv("MODEL_PATH"), "model.pkl"))
+DQ_REPORT_PATH = str(_resolve_project_path(os.getenv("DQ_REPORT_PATH"), "dq_report.json"))
 
 # Load ML Model at startup
-MODEL_PATH = "model.pkl"
 ml_model = None
-if os.path.exists(MODEL_PATH):
+if Path(MODEL_PATH).exists():
     with open(MODEL_PATH, "rb") as f:
         ml_model = pickle.load(f)
 
@@ -60,9 +75,8 @@ def health_check():
 
 @app.get("/data-quality/report")
 def get_dq_report():
-    report_file = "dq_report.json"
-    if os.path.exists(report_file):
-        with open(report_file, "r") as f:
+    if Path(DQ_REPORT_PATH).exists():
+        with open(DQ_REPORT_PATH, "r") as f:
             return json.load(f)
     raise HTTPException(status_code=404, detail="Data quality report not found")
 
@@ -113,7 +127,6 @@ def list_shipments(
     total_count = conn.execute(total_query, params).fetchone()[0]
     conn.close()
 
-    # Fill NaN values to ensure clean JSON serialization
     records = df.fillna("").to_dict(orient="records")
     return {
         "total": total_count,
@@ -193,8 +206,6 @@ def predict_delay(payload: DelayPredictionRequest):
         )
 
     input_data = pd.DataFrame([payload.model_dump()])
-
-    # Predict probability of class 1 (delay > 24 hours)
     prob_delayed = float(ml_model.predict_proba(input_data)[0][1])
 
     return {
@@ -209,3 +220,12 @@ def predict_delay(payload: DelayPredictionRequest):
             else "LOW"
         ),
     }
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    
+    

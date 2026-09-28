@@ -2,15 +2,29 @@ import json
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
 import duckdb
 import google.generativeai as genai
 import httpx
 
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _resolve_project_path(value: str | None, default_name: str) -> Path:
+    if value is None or value == "":
+        return PROJECT_ROOT / default_name
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return candidate
+    return (PROJECT_ROOT / candidate).resolve()
+
+
 # ---------------------------------------------------------
 # 1. Observability: Structured LLM & Tool Logging
 # ---------------------------------------------------------
-LOG_FILENAME = "agent_activity.jsonl"
+LOG_FILENAME = str(_resolve_project_path(os.getenv("AGENT_LOG_PATH"), "agent_activity.jsonl"))
 
 
 def log_interaction(event_type: str, data: dict):
@@ -26,7 +40,7 @@ def log_interaction(event_type: str, data: dict):
 # ---------------------------------------------------------
 # 2. Tool Implementations
 # ---------------------------------------------------------
-DB_PATH = os.getenv("DB_PATH", "supply_chain.db")
+DB_PATH = str(_resolve_project_path(os.getenv("DB_PATH"), "supply_chain.db"))
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 
 
@@ -36,14 +50,7 @@ def query_shipments(
     status: str = "",
     limit: int = 5,
 ) -> str:
-    """Reads shipments from the curated database with optional filters.
-
-    Args:
-        origin: Origin port code (e.g. 'NLRTM').
-        destination: Destination port code (e.g. 'PKKAR').
-        status: Current shipment status (e.g. 'DELIVERED').
-        limit: Maximum number of rows to retrieve (default 5).
-    """
+    """Reads shipments from the curated database with optional filters."""
     conn = duckdb.connect(DB_PATH, read_only=True)
     conditions = ["1=1"]
     params = []
@@ -72,12 +79,7 @@ def query_shipments(
 
 
 def get_route_stats(origin: str, destination: str) -> str:
-    """Returns aggregated route metrics (average delay hours, on-time rate, and shipment volume).
-
-    Args:
-        origin: Origin port code (e.g. 'NLRTM').
-        destination: Destination port code (e.g. 'PKKAR').
-    """
+    """Returns aggregated route metrics."""
     conn = duckdb.connect(DB_PATH, read_only=True)
     route_key = f"{origin}->{destination}"
     query = """
@@ -106,11 +108,7 @@ def get_route_stats(origin: str, destination: str) -> str:
 
 
 def predict_delay(shipment_id: str) -> str:
-    """Calls the predictive ML endpoint for a shipment ID and returns delay risk probability.
-
-    Args:
-        shipment_id: The unique identifier for the shipment (e.g. 'SHP-00623').
-    """
+    """Calls the predictive ML endpoint for a shipment ID."""
     conn = duckdb.connect(DB_PATH, read_only=True)
     row = conn.execute(
         """
@@ -189,9 +187,8 @@ def run_assistant():
 
     genai.configure(api_key=api_key)
 
-    # Initialize Gemini model with tools and system instruction
     model = genai.GenerativeModel(
-        model_name="gemini-3.8-flash",  # <-- Update here
+        model_name="gemini-1.5-flash",
         tools=[query_shipments, get_route_stats, predict_delay],
         system_instruction=SYSTEM_INSTRUCTION,
     )
@@ -213,31 +210,25 @@ def run_assistant():
                 break
 
             log_interaction("user_message", {"query": user_input})
-
-            # Send prompt to Gemini
             response = chat.send_message(user_input)
 
-            # Function calling loop (with a max of 4 turns as a runaway loop guardrail)
             max_turns = 4
             turn = 0
 
             while turn < max_turns:
                 turn += 1
 
-                # Check if the model requested function calls
                 function_calls = []
                 for part in response.candidates[0].content.parts:
                     if fn := part.function_call:
                         function_calls.append(fn)
 
                 if not function_calls:
-                    # Model provided its final natural language answer
                     reply = response.text
                     print(f"\n🤖 Assistant: {reply}")
                     log_interaction("assistant_reply", {"content": reply})
                     break
 
-                # Execute requested functions
                 tool_response_parts = []
                 for fn in function_calls:
                     fn_name = fn.name
@@ -270,7 +261,6 @@ def run_assistant():
                         )
                     )
 
-                # Send tool results back to Gemini
                 response = chat.send_message(tool_response_parts)
 
         except (KeyboardInterrupt, EOFError):
@@ -282,3 +272,6 @@ def run_assistant():
 
 if __name__ == "__main__":
     run_assistant()
+    
+    
+    
