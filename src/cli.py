@@ -1,5 +1,9 @@
+import importlib.metadata
+import re
 import subprocess
 import sys
+import tomllib  # Python 3.11+ standard library
+
 
 
 def run_command(cmd: list[str]) -> int:
@@ -24,36 +28,49 @@ def run_tests_with_coverage() -> int:
 
 
 def lock_dependencies(output_file: str = "requirements.txt") -> int:
-    """Locks installed environment packages into requirements.txt."""
-    print(f"\n🔒 Locking dependencies into {output_file}...")
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "freeze"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        lines = result.stdout.splitlines()
+    """Extracts only [project.dependencies] from pyproject.toml and pins their
 
-        # Exclude local package and legacy unused LangChain packages
-        filtered_lines = [
-            line
-            for line in lines
-            if not line.startswith("-e ")
-            and not line.startswith("langchain")
-            and "supply_chain_platform" not in line.lower()
-            and "supply-chain-platform" not in line.lower()
-        ]
+    installed versions.
+    """
+    print(f"\n🔒 Generating {output_file} strictly from pyproject.toml...")
+    try:
+        with open("pyproject.toml", "rb") as f:
+            data = tomllib.load(f)
+
+        project_deps = data.get("project", {}).get("dependencies", [])
+        if not project_deps:
+            print("⚠️ No dependencies found under [project.dependencies].")
+            return 1
+
+        locked_lines = []
+        for dep in project_deps:
+            # Extract normalized package name (handles 'fastapi>=0.104.1', 'uvicorn[standard]', etc.)
+            pkg_name = (
+                re.split(r"[><=~!;\[]", dep.strip())[0].strip().replace("_", "-")
+            )
+            try:
+                version = importlib.metadata.version(pkg_name)
+                locked_lines.append(f"{pkg_name}=={version}")
+            except importlib.metadata.PackageNotFoundError:
+                # Fall back to the original constraint if package is not locally installed
+                locked_lines.append(dep.strip())
+
+        # Sort alphabetically for deterministic output
+        locked_lines.sort()
 
         with open(output_file, "w", encoding="utf-8") as f:
-            f.write("\n".join(filtered_lines) + "\n")
+            f.write("\n".join(locked_lines) + "\n")
 
         print(
-            f"✅ Successfully locked {len(filtered_lines)} dependencies into {output_file}"
+            f"✅ Locked {len(locked_lines)} packages from pyproject.toml into {output_file}:\n"
         )
+        for line in locked_lines:
+            print(f"   • {line}")
+
         return 0
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Failed to lock dependencies: {e.stderr}")
+
+    except Exception as e:
+        print(f"❌ Failed to generate {output_file}: {e}")
         return 1
 
 
