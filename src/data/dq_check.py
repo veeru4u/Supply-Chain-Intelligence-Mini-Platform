@@ -5,10 +5,21 @@ from pathlib import Path
 import pandas as pd
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _resolve_project_path(value: str | None, default_name: str) -> Path:
+    if value is None or value == "":
+        return PROJECT_ROOT / default_name
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return candidate
+    return (PROJECT_ROOT / candidate).resolve()
+
+
 def check_shipments(df: pd.DataFrame) -> list:
     issues = []
 
-    # 1. Missing Timestamps
     missing_dep = df["planned_departure"].isnull().sum()
     if missing_dep > 0:
         issues.append(
@@ -20,7 +31,6 @@ def check_shipments(df: pd.DataFrame) -> list:
             }
         )
 
-    # 2. Chronological Impossibility (Arrival before Departure)
     if "actual_departure" in df.columns and "actual_arrival" in df.columns:
         chron_issues = (
             pd.to_datetime(df["actual_arrival"])
@@ -36,7 +46,6 @@ def check_shipments(df: pd.DataFrame) -> list:
                 }
             )
 
-    # 3. Negative Weights (Updated to match weight_tons)
     if "weight_tons" in df.columns:
         neg_weights = (df["weight_tons"] < 0).sum()
         if neg_weights > 0:
@@ -54,7 +63,6 @@ def check_shipments(df: pd.DataFrame) -> list:
 
 def check_ports(df: pd.DataFrame) -> list:
     issues = []
-    # Check for invalid timezones or missing congestion scores
     if "timezone" in df.columns:
         missing_tz = df["timezone"].isnull().sum()
         if missing_tz > 0:
@@ -71,7 +79,6 @@ def check_ports(df: pd.DataFrame) -> list:
 
 def check_port_events(df: pd.DataFrame) -> list:
     issues = []
-    # Check for negative delays
     if "delay_minutes" in df.columns:
         neg_delay = (df["delay_minutes"] < 0).sum()
         if neg_delay > 0:
@@ -86,8 +93,9 @@ def check_port_events(df: pd.DataFrame) -> list:
     return issues
 
 
-def run_dq_checks(data_dir: str):
-    data_path = Path(data_dir)
+def run_dq_checks(data_dir: str, output_file: str | None = None):
+    data_path = _resolve_project_path(data_dir, "data")
+    report_path = _resolve_project_path(output_file, "dq_report.json")
     report = {"summary": "Data Quality Report", "issues": []}
 
     files = {
@@ -102,15 +110,20 @@ def run_dq_checks(data_dir: str):
             df = pd.read_csv(file_path)
             report["issues"].extend(check_func(df))
         else:
-            print(f"Warning: {filename} not found in {data_dir}")
+            print(f"Warning: {filename} not found in {data_path}")
 
-    with open("dq_report.json", "w") as f:
+    with open(report_path, "w") as f:
         json.dump(report, f, indent=4)
-    print("✅ Data Quality checks complete. Report saved to dq_report.json")
+    print(f"✅ Data Quality checks complete. Report saved to {report_path}")
+    return report
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", default="./data")
+    parser.add_argument("--output", default="dq_report.json")
     args = parser.parse_args()
-    run_dq_checks(args.input)
+    run_dq_checks(args.input, args.output)
+    
+    
+    

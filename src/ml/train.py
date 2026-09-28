@@ -1,4 +1,5 @@
 import pickle
+from pathlib import Path
 
 import duckdb
 from sklearn.compose import ColumnTransformer
@@ -10,11 +11,22 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
 
-def train_model(db_path="supply_chain.db"):
-    conn = duckdb.connect(db_path)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-    # 1. Compute historical vessel delay rate & route delay rate
-    # Using window/CTE aggregates to capture historical signals without leaking test actuals
+
+def _resolve_project_path(value: str | None, default_name: str) -> Path:
+    if value is None or value == "":
+        return PROJECT_ROOT / default_name
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return candidate
+    return (PROJECT_ROOT / candidate).resolve()
+
+
+def train_model(db_path="supply_chain.db"):
+    db_path = _resolve_project_path(db_path, "supply_chain.db")
+    conn = duckdb.connect(str(db_path))
+
     query = """
         WITH base_stats AS (
             SELECT
@@ -31,7 +43,6 @@ def train_model(db_path="supply_chain.db"):
                 planned_arrival,
                 transit_days_planned,
                 on_time_flag,
-                -- Booking lead time (days between booking and departure)
                 date_diff('day', CAST(booking_date AS TIMESTAMP), CAST(planned_departure AS TIMESTAMP)) AS booking_lead_days,
                 EXTRACT(month FROM CAST(planned_departure AS TIMESTAMP)) AS departure_month,
                 EXTRACT(dow FROM CAST(planned_departure AS TIMESTAMP)) AS departure_dow
@@ -73,7 +84,6 @@ def train_model(db_path="supply_chain.db"):
     if df.empty:
         raise ValueError("No data found in curated_shipments table.")
 
-    # Target: 1 if delayed > 24 hours, 0 if on time
     y = (~df["on_time_flag"]).astype(int)
 
     feature_cols = [
@@ -156,11 +166,15 @@ def train_model(db_path="supply_chain.db"):
     print("\nClassification Report:")
     print(classification_report(y_test, y_pred))
 
-    with open("model.pkl", "wb") as f:
+    model_path = _resolve_project_path("model.pkl", "model.pkl")
+    with open(model_path, "wb") as f:
         pickle.dump(clf, f)
 
-    print("Model successfully saved to model.pkl")
+    print(f"Model successfully saved to {model_path}")
 
 
 if __name__ == "__main__":
     train_model()
+    
+    
+    
