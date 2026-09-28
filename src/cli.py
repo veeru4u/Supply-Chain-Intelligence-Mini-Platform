@@ -35,11 +35,12 @@ def lock_dependencies(output_file: str = "requirements.txt") -> int:
         )
         lines = result.stdout.splitlines()
 
-        # Filter out editable local package installation lines (e.g. -e .)
+        # Exclude local package and legacy unused LangChain packages
         filtered_lines = [
             line
             for line in lines
             if not line.startswith("-e ")
+            and not line.startswith("langchain")
             and "supply_chain_platform" not in line.lower()
             and "supply-chain-platform" not in line.lower()
         ]
