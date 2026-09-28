@@ -5,7 +5,6 @@ import sys
 import tomllib  # Python 3.11+ standard library
 
 
-
 def run_command(cmd: list[str]) -> int:
     """Executes a command and returns the exit code."""
     print(f"\n==> Running: {' '.join(cmd)}")
@@ -45,9 +44,7 @@ def lock_dependencies(output_file: str = "requirements.txt") -> int:
         locked_lines = []
         for dep in project_deps:
             # Extract normalized package name (handles 'fastapi>=0.104.1', 'uvicorn[standard]', etc.)
-            pkg_name = (
-                re.split(r"[><=~!;\[]", dep.strip())[0].strip().replace("_", "-")
-            )
+            pkg_name = re.split(r"[><=~!;\[]", dep.strip())[0].strip().replace("_", "-")
             try:
                 version = importlib.metadata.version(pkg_name)
                 locked_lines.append(f"{pkg_name}=={version}")
