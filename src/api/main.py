@@ -1,16 +1,15 @@
-from pathlib import Path
 import json
 import logging
 import os
 import pickle
 import time
+from pathlib import Path
 from typing import Optional
 
 import duckdb
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -31,7 +30,9 @@ logger = logging.getLogger("supply_chain_api")
 app = FastAPI(title="Supply Chain Intelligence API", version="1.0.0")
 DB_PATH = str(_resolve_project_path(os.getenv("DB_PATH"), "supply_chain.db"))
 MODEL_PATH = str(_resolve_project_path(os.getenv("MODEL_PATH"), "model.pkl"))
-DQ_REPORT_PATH = str(_resolve_project_path(os.getenv("DQ_REPORT_PATH"), "dq_report.json"))
+DQ_REPORT_PATH = str(
+    _resolve_project_path(os.getenv("DQ_REPORT_PATH"), "dq_report.json")
+)
 
 # Load ML Model at startup
 ml_model = None
@@ -226,6 +227,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
-    
-    
-    

@@ -8,7 +8,6 @@ import duckdb
 import google.generativeai as genai
 import httpx
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -24,7 +23,9 @@ def _resolve_project_path(value: str | None, default_name: str) -> Path:
 # ---------------------------------------------------------
 # 1. Observability: Structured LLM & Tool Logging
 # ---------------------------------------------------------
-LOG_FILENAME = str(_resolve_project_path(os.getenv("AGENT_LOG_PATH"), "agent_activity.jsonl"))
+LOG_FILENAME = str(
+    _resolve_project_path(os.getenv("AGENT_LOG_PATH"), "agent_activity.jsonl")
+)
 
 
 def log_interaction(event_type: str, data: dict):
@@ -188,7 +189,7 @@ def run_assistant():
     genai.configure(api_key=api_key)
 
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
+        model_name="gemini-3.8-flash",
         tools=[query_shipments, get_route_stats, predict_delay],
         system_instruction=SYSTEM_INSTRUCTION,
     )
@@ -272,6 +273,3 @@ def run_assistant():
 
 if __name__ == "__main__":
     run_assistant()
-    
-    
-    

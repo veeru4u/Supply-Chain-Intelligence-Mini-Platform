@@ -10,7 +10,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -27,6 +26,8 @@ def train_model(db_path="supply_chain.db"):
     db_path = _resolve_project_path(db_path, "supply_chain.db")
     conn = duckdb.connect(str(db_path))
 
+    # Updated Query: explicitly DROP rows with impossible physics (DQ issues)
+    # but ALLOW nulls to pass through to be IMPUTED by the scikit-learn pipeline.
     query = """
         WITH base_stats AS (
             SELECT
@@ -48,6 +49,8 @@ def train_model(db_path="supply_chain.db"):
                 EXTRACT(dow FROM CAST(planned_departure AS TIMESTAMP)) AS departure_dow
             FROM curated_shipments
             WHERE on_time_flag IS NOT NULL
+              AND container_count > 0
+              AND (weight_tons IS NULL OR weight_tons >= 0)
         ),
         vessel_aggregates AS (
             SELECT
@@ -84,6 +87,7 @@ def train_model(db_path="supply_chain.db"):
     if df.empty:
         raise ValueError("No data found in curated_shipments table.")
 
+    # Target: 1 if delayed (on_time_flag is false), 0 if on-time
     y = (~df["on_time_flag"]).astype(int)
 
     feature_cols = [
@@ -120,6 +124,7 @@ def train_model(db_path="supply_chain.db"):
         "route_hist_delay_rate",
     ]
 
+    # Impute missing categorical values with 'UNKNOWN'
     categorical_transformer = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="constant", fill_value="UNKNOWN")),
@@ -127,6 +132,7 @@ def train_model(db_path="supply_chain.db"):
         ]
     )
 
+    # Impute missing numerical values (like missing weight_tons) with the median
     numeric_transformer = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
@@ -148,7 +154,7 @@ def train_model(db_path="supply_chain.db"):
                 HistGradientBoostingClassifier(
                     max_iter=150,
                     learning_rate=0.05,
-                    class_weight="balanced",
+                    class_weight="balanced",  # Handles our 40/60 imbalance perfectly without SMOTE
                     random_state=42,
                 ),
             ),
@@ -175,6 +181,3 @@ def train_model(db_path="supply_chain.db"):
 
 if __name__ == "__main__":
     train_model()
-    
-    
-    

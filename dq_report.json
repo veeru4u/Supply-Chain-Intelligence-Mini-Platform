@@ -4,8 +4,80 @@
         {
             "check": "Negative weight_tons",
             "rows_affected": 36,
+            "severity": "critical",
+            "action": "Quarantine"
+        },
+        {
+            "check": "Zero or negative container_count",
+            "rows_affected": 23,
+            "severity": "critical",
+            "action": "Quarantine"
+        },
+        {
+            "check": "Missing weight_tons",
+            "rows_affected": 73,
             "severity": "warning",
-            "action": "Take absolute value"
+            "action": "Impute/Flag"
+        },
+        {
+            "check": "Missing status",
+            "rows_affected": 54,
+            "severity": "warning",
+            "action": "Impute"
+        },
+        {
+            "check": "Missing cargo_type",
+            "rows_affected": 15,
+            "severity": "info",
+            "action": "Impute"
+        },
+        {
+            "check": "Invalid origin or destination port",
+            "rows_affected": 95,
+            "severity": "critical",
+            "action": "Drop"
+        },
+        {
+            "check": "Duplicate shipment_ids",
+            "rows_affected": 28,
+            "severity": "critical",
+            "action": "Drop"
+        },
+        {
+            "check": "Booking date after Actual Departure",
+            "rows_affected": 39,
+            "severity": "warning",
+            "action": "Drop"
+        },
+        {
+            "check": "Inconsistent status casing",
+            "rows_affected": 92,
+            "severity": "warning",
+            "action": "Standardize to uppercase DELIVERED"
+        },
+        {
+            "check": "Missing port country",
+            "rows_affected": 1,
+            "severity": "info",
+            "action": "Impute manually (e.g. BEANR -> Belgium)"
+        },
+        {
+            "check": "Missing event_type",
+            "rows_affected": 140,
+            "severity": "critical",
+            "action": "Drop"
+        },
+        {
+            "check": "Duplicate event_ids",
+            "rows_affected": 103,
+            "severity": "critical",
+            "action": "Drop"
+        },
+        {
+            "check": "Orphaned events (unknown vessel_id)",
+            "rows_affected": 207,
+            "severity": "warning",
+            "action": "Drop"
         }
     ]
 }
