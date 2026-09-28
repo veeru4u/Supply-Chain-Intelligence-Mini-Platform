@@ -1,0 +1,10 @@
+.venv
+.pytest_cache
+.coverage
+dist
+.ruff_cache
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class

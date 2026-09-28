@@ -1,0 +1,11 @@
+{
+    "summary": "Data Quality Report",
+    "issues": [
+        {
+            "check": "Negative weight_tons",
+            "rows_affected": 36,
+            "severity": "warning",
+            "action": "Take absolute value"
+        }
+    ]
+}
